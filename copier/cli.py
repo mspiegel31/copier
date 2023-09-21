@@ -369,8 +369,18 @@ class CopierCheckSubApp(_Subcommand):
         """
         try:
             self._worker(dst_path=destination_path).run_check_update()
-        except SubprojectOutdatedError:
+        except SubprojectOutdatedError as err:
+            if not self.quiet:
+                print(
+                    f"NEW template version available. "
+                    f"Currently using {colors.yellow & colors.bold | err.subproject_version}, "
+                    f"latest is {colors.green & colors.bold | err.upstream_version}.",
+                    file=sys.stderr,
+                )
             return self.EXIT_CODE_OUTDATED
+
+        if not self.quiet:
+            print(colors.green | "Project is up-to-date 🎉", file=sys.stdin)
         return 0
 
 

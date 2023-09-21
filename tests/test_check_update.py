@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import pytest
@@ -5,15 +6,13 @@ from plumbum import local
 from plumbum.cmd import git
 
 import copier
-from copier.errors import DirtyLocalWarning, SubprojectOutdatedError
+from copier.errors import DirtyLocalWarning, SubprojectOutdatedError, UserMessageError
 
 from .helpers import build_file_tree
 
 
-def test_check_update_when_updates_needed(
-    tmp_path_factory: pytest.TempPathFactory,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+@pytest.fixture
+def setup_git_tracked_template(tmp_path_factory: pytest.TempPathFactory):
     src, dst = map(tmp_path_factory.mktemp, ("src", "dst"))
 
     build_file_tree(
@@ -40,7 +39,6 @@ def test_check_update_when_updates_needed(
                 delete me.
                 """
             ),
-            (src / "symlink.txt"): Path("./to_delete.txt"),
         }
     )
 
@@ -50,6 +48,35 @@ def test_check_update_when_updates_needed(
         git("commit", "-m", "first commit on src")
 
     copier.run_copy(str(src), dst, defaults=True, overwrite=True)
+    yield src, dst
+    shutil.rmtree(src)
+    shutil.rmtree(dst)
+
+
+def test_fails_when_no_template_ref(tmp_path_factory: pytest.TempPathFactory) -> None:
+    src, dst = map(tmp_path_factory.mktemp, ("src", "dst"))
+
+    build_file_tree(
+        {
+            (src / "aaaa.txt"): (
+                """
+                Lorem ipsum
+                """
+            )
+        }
+    )
+    with pytest.raises(UserMessageError) as excinfo:
+        copier.run_check_update(dst, None, defaults=True, overwrite=True)
+
+    assert "Cannot check because cannot obtain old template references" in str(
+        excinfo.value
+    )
+
+
+def test_check_update_when_updates_needed(
+    setup_git_tracked_template: tuple[Path, Path],
+) -> None:
+    src, dst = setup_git_tracked_template
 
     with local.cwd(src):
         # test adding a file
@@ -59,29 +86,11 @@ def test_check_update_when_updates_needed(
         with open("aaaa.txt", "a") as f:
             f.write("dolor sit amet")
 
-        # test updating a symlink
-        Path("symlink.txt").unlink()
-        Path("symlink.txt").symlink_to("test_file.txt")
-
-        # test removing a file
-        Path("to_delete.txt").unlink()
-
-    # dst must be vcs-tracked to use run_update
+    # dst must be vcs-tracked to use check_update
     with local.cwd(dst):
         git("init")
         git("add", "-A")
         git("commit", "-m", "first commit on dst")
-
-    # make sure changes have not yet propagated
-    assert not (dst / "test_file.txt").exists()
-
-    assert (src / "aaaa.txt").read_text() != (dst / "aaaa.txt").read_text()
-
-    p1 = src / "symlink.txt"
-    p2 = dst / "symlink.txt"
-    assert p1.read_text() != p2.read_text()
-
-    assert (dst / "to_delete.txt").exists()
 
     with pytest.warns(DirtyLocalWarning):
         with pytest.raises(SubprojectOutdatedError):

@@ -848,9 +848,9 @@ class Worker:
                     Currently using {self.subproject.template.version},
                     latest is {self.template.version}.""",
                 )
-            raise SubprojectOutdatedError()
-        elif not self.quiet:
-            self._print_message("Project is up-to-date 🎉")
+            raise SubprojectOutdatedError(
+                self.template.version, self.subproject.template.version
+            )
 
     def _apply_update(self):
         git = get_git()
