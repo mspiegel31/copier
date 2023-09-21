@@ -1,7 +1,7 @@
 """
 Command line entrypoint. This module declares the Copier CLI applications.
 
-Basically, there are 3 different commands you can run:
+Basically, there are 4 different commands you can run:
 
 -   [`copier`][copier.cli.CopierApp], the main app, which is a shortcut for the
     `copy` and `update` subapps.
@@ -40,6 +40,13 @@ Basically, there are 3 different commands you can run:
         copier update
         ```
 
+-   [`copier check-update`][copier.cli.CopierCheckSubApp] to check if a preexisting
+    project is using the latest version of its template.
+    !!! example
+        ```sh
+        copier check-update
+        ```
+
 Below are the docs of each one of those.
 """
 
@@ -53,7 +60,7 @@ import yaml
 from decorator import decorator
 from plumbum import cli, colors
 
-from .errors import UnsafeTemplateError, UserMessageError
+from .errors import SubprojectOutdatedError, UnsafeTemplateError, UserMessageError
 from .main import Worker
 from .tools import copier_version
 from .types import AnyByStrDict, OptStr, StrSeq
@@ -325,6 +332,54 @@ class CopierRecopySubApp(_Subcommand):
             skip_answered=self.skip_answered,
         ) as worker:
             worker.run_recopy()
+        return 0
+
+
+@CopierApp.subcommand("check_update")
+class CopierCheckSubApp(cli.Application):
+    """The `copier check` subcommand.
+    Use this subcommand to check if an existing subproject is using the
+    latest version of a template.
+    Attributes:
+        exit-code: Set [exit-code][] option.
+    """
+
+    DESCRIPTION = "Check if a copy is using the latest version of its original template"
+    DESCRIPTION_MORE = dedent(
+        """\
+        The copy must have a valid answers file which contains info
+        from the last Copier execution, including the source template
+        (it must be a key called `_src_path`).
+        If that file contains also `_commit` and `destination_path` is a git
+        repository, this command will do its best to determine whether a newer
+        version is available, applying PEP 440 to the template's history.
+        """
+    )
+
+    exit_code: cli.SwitchAttr = cli.SwitchAttr(
+        ["-e", "--exit-code"],
+        int,
+        default=0,
+        help=(
+            "Exit code for the command if a newer version is available, "
+            "for use in scripts."
+        ),
+    )
+
+    @handle_exceptions
+    def main(self, destination_path: cli.ExistingDirectory = ".") -> int:
+        """Call [run_check][copier.main.Worker.run_check].
+        Parameters:
+            destination_path:
+                Only the destination path is needed to check, because the
+                `src_path` comes from [the answers file][the-copier-answersyml-file].
+                The subproject must exist. If not specified, the currently
+                working directory is used.
+        """
+        try:
+            self.parent._worker(dst_path=destination_path).run_check()
+        except SubprojectOutdatedError:
+            return self.exit_code
         return 0
 
 

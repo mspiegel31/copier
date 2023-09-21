@@ -40,6 +40,7 @@ from questionary import unsafe_prompt
 from .errors import (
     CopierAnswersInterrupt,
     ExtensionNotFoundError,
+    SubprojectOutdatedError,
     UnsafeTemplateError,
     UserMessageError,
 )
@@ -818,6 +819,39 @@ class Worker:
         self._apply_update()
         self._print_message(self.template.message_after_update)
 
+    def run_check_update(self) -> None:
+        """Check if a subproject is using the latest version of its template.
+
+        See [checking a project][checking-a-project].
+        """
+        # Check all you need is there
+        if self.subproject.template is None or self.subproject.template.ref is None:
+            raise UserMessageError(
+                "Cannot check because cannot obtain old template references "
+                f"from `{self.subproject.answers_relpath}`."
+            )
+        if self.template.commit is None:
+            raise UserMessageError(
+                "Checking is only supported in git-tracked templates."
+            )
+        if not self.subproject.template.version:
+            raise UserMessageError(
+                "Cannot check: version from last update not detected."
+            )
+        if not self.template.version:
+            raise UserMessageError("Cannot check: version from template not detected.")
+
+        if self.template.version > self.subproject.template.version:
+            if not self.quiet:
+                self._print_message(
+                    f"""NEW template version available.
+                    Currently using {self.subproject.template.version},
+                    latest is {self.template.version}.""",
+                )
+            raise SubprojectOutdatedError()
+        elif not self.quiet:
+            self._print_message("Project is up-to-date 🎉")
+
     def _apply_update(self):
         git = get_git()
         subproject_top = Path(
@@ -981,6 +1015,20 @@ def run_recopy(
         kwargs["data"] = data
     with Worker(dst_path=Path(dst_path), **kwargs) as worker:
         worker.run_recopy()
+    return worker
+
+
+def run_check_update(
+    dst_path: StrOrPath = ".",
+    data: Optional[AnyByStrDict] = None,
+    **kwargs,
+) -> Worker:
+    """Check if a subproject is using the latest version of its template.
+
+    See [Worker][copier.main.Worker] fields to understand this function's args.
+    """
+    with Worker(dst_path=Path(dst_path), **kwargs) as worker:
+        worker.run_check_update()
     return worker
 
 

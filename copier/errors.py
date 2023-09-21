@@ -54,6 +54,10 @@ class PathError(CopierError, ValueError):
     """The path is invalid in the given context."""
 
 
+class SubprojectOutdatedError(UserMessageError):
+    """An old version of the template is being used."""
+
+
 class PathNotAbsoluteError(PathError):
     """The path is not absolute, but it should be."""
 
