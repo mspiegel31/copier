@@ -336,7 +336,7 @@ class CopierRecopySubApp(_Subcommand):
 
 
 @CopierApp.subcommand("check_update")
-class CopierCheckSubApp(cli.Application):
+class CopierCheckSubApp(_Subcommand):
     """The `copier check` subcommand.
     Use this subcommand to check if an existing subproject is using the
     latest version of a template.
@@ -355,16 +355,7 @@ class CopierCheckSubApp(cli.Application):
         version is available, applying PEP 440 to the template's history.
         """
     )
-
-    exit_code: cli.SwitchAttr = cli.SwitchAttr(
-        ["-e", "--exit-code"],
-        int,
-        default=0,
-        help=(
-            "Exit code for the command if a newer version is available, "
-            "for use in scripts."
-        ),
-    )
+    EXIT_CODE_OUTDATED = 0b100
 
     @handle_exceptions
     def main(self, destination_path: cli.ExistingDirectory = ".") -> int:
@@ -377,9 +368,9 @@ class CopierCheckSubApp(cli.Application):
                 working directory is used.
         """
         try:
-            self.parent._worker(dst_path=destination_path).run_check()
+            self._worker(dst_path=destination_path).run_check_update()
         except SubprojectOutdatedError:
-            return self.exit_code
+            return self.EXIT_CODE_OUTDATED
         return 0
 
 

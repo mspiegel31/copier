@@ -3,6 +3,8 @@
 from pathlib import Path
 from typing import TYPE_CHECKING, Sequence
 
+from packaging.version import Version
+
 from .tools import printf_exception
 from .types import PathSeq
 
@@ -56,6 +58,12 @@ class PathError(CopierError, ValueError):
 
 class SubprojectOutdatedError(UserMessageError):
     """An old version of the template is being used."""
+
+    def __init__(self, upstream_version: Version, subproject_version: Version) -> None:
+        self.upstream_version = upstream_version
+        self.subproject_version = subproject_version
+        msg = f"Template is outdated. Latest version is {upstream_version}, but you are using {subproject_version}."
+        super().__init__(msg)
 
 
 class PathNotAbsoluteError(PathError):
